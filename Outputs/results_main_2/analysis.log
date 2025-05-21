@@ -1,0 +1,6 @@
+2025-05-09 13:33:08,854 - INFO - === Starting plotting script ===
+2025-05-09 13:33:08,880 - INFO - Read 3920 rows from results_main_2/all_experiment_results.csv
+2025-05-09 13:33:08,881 - INFO - All required columns are present.
+2025-05-09 13:33:09,479 - INFO - Preprocessing complete. 3920 rows remain.
+2025-05-09 13:33:09,480 - INFO - Found 2 base datasets: ['Shapes10d', 'Shapes8d']
+2025-05-09 13:33:46,916 - INFO - === Done. ===

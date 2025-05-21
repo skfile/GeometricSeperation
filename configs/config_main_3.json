@@ -1,0 +1,73 @@
+{
+  "results_dir": "results_main_3/",
+  "GW_loss_fun": "square_loss",
+  "use_gpu": true,
+  "parallel_processing": true,
+  "n_jobs": -1,
+  "batch_size": 20,
+  "use_optimized_gw": true,
+
+  "clustering": {
+    "method": "kmeans",
+    "n_clusters": 4,
+    "params": { "n_init": 10 },
+    "gt_method": "kmeans",
+    "gt_n_clusters": 4,
+    "gt_params": { "n_init": 20 }
+  },
+
+  "potential_name": "distance_origin",
+  "potential_params": { "scale": 1.0 },
+
+  "kernel_methods": [
+    { "name": "IAN", "params": {} },
+    { "name": "gaussian", "params": { "sigma": 0.5 } },
+    { "name": "knn_shortest_path", "params": { "knn": 16, "shortest_path": false } },
+    { "name": "knn_shortest_path", "params": { "knn": 16, "shortest_path": false, "pruning_method": "distance" } },
+    { "name": "knn_shortest_path", "params": { "knn": 16, "shortest_path": false, "pruning_method": "bisection" } },
+    { "name": "knn_shortest_path", "params": { "knn": 16, "shortest_path": false, "pruning_method": "mst" } },
+    { "name": "knn_shortest_path", "params": { "knn": 16, "shortest_path": false, "pruning_method": "density" } },
+    { "name": "tsne", "params": { "perplexity": 30 } }
+  ],
+
+  "embedding_methods": [
+    "diffusionmap",
+    "umap",
+    "tsne",
+    "isomap",
+    "lle"
+  ],
+
+  "datasets": [
+    {
+      "name": "Shapes12d",
+      "type": "unions_of_shapes",
+      "shapes": [
+        { "shape_type": "sphere_hd",    "dim": 12, "radius": 2.0, "n_points": 500 },
+        { "shape_type": "ellipsoid_hd", "dim": 12, "axes": [1.0,1.0,1.0,1.0,1.2,1.2,1.5,1.0,1.0,0.8,1.0,1.1], "n_points": 500 },
+        { "shape_type": "torus_hd",     "dim": 12, "major_radius": 4.0, "minor_radius": 1.5, "n_points": 500 },
+        { "shape_type": "hyperbolic_hd","dim": 12, "radius": 0.9, "curvature": -1.0, "n_points": 500 }
+      ],
+      "offset": [0.0, 0.5, 1, 1.5, 2.0, 3.0, 5.0],
+      "fractions": [1.0, 0.8, 0.6, 0.4, 0.2, 0.1, 0.05],
+      "methods": ["uniform"],
+      "noise": false,
+      "noise_scale": 0.0
+    },
+    {
+      "name": "Shapes15d",
+      "type": "unions_of_shapes",
+      "shapes": [
+        { "shape_type": "sphere_hd",    "dim": 15, "radius": 2.0, "n_points": 500 },
+        { "shape_type": "ellipsoid_hd", "dim": 15, "axes": [1.0,1.0,1.0,1.0,1.0,1.2,1.2,1.5,1.0,0.8,1.0,1.0,1.1,1.0,1.0], "n_points": 500 },
+        { "shape_type": "torus_hd",     "dim": 15, "major_radius": 4.5, "minor_radius": 1.5, "n_points": 500 },
+        { "shape_type": "hyperbolic_hd","dim": 15, "radius": 0.9, "curvature": -1.0, "n_points": 500 }
+      ],
+      "offset": [0.0, 0.5, 1, 1.5, 2.0, 3.0, 5.0],
+      "fractions": [1.0, 0.8, 0.6, 0.4, 0.2, 0.1, 0.05],
+      "methods": ["uniform"],
+      "noise": false,
+      "noise_scale": 0.0
+    }
+  ]
+}
