@@ -3,6 +3,8 @@ embedding_algorithms.py
 -----------------------
 Contains embedding methods such as Diffusion Maps, Isomap, t-SNE, Spectral Embeddings, LLE, and UMAP.
 Also includes helper functions for locally linear embedding, etc.
+
+TSNE Implementation adapted from https://github.com/dyballa/IAN.git.
 """
 
 import numpy as np

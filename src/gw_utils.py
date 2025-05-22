@@ -1,3 +1,11 @@
+"""
+gw_utils.py
+-----------------------------
+Module for Gromov-Wasserstein distance computation with GPU support
+and parallel processing.
+
+"""
+
 import numpy as np
 import ot
 import multiprocessing
@@ -6,7 +14,6 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import logging
 import traceback
 
-# Handle GPU availability gracefully
 try:
     import torch
     HAS_TORCH = True
@@ -14,7 +21,6 @@ except ImportError:
     HAS_TORCH = False
     print("Warning: PyTorch not available. GPU acceleration will be disabled.")
 
-# Set up logging
 logger = logging.getLogger("gw_utils")
 handler = logging.StreamHandler()
 handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
@@ -74,7 +80,6 @@ def gromov_wasserstein(C1, C2, p=None, q=None, loss_fun='square_loss',
             else:
                 q = torch.tensor(q, device=device)
             
-            # Use entropic GW which is faster
             gw_dist, log = ot.gromov.entropic_gromov_wasserstein2(
                 C1_t.cpu().numpy(), C2_t.cpu().numpy(), 
                 p.cpu().numpy(), q.cpu().numpy(),
@@ -119,7 +124,6 @@ def parallel_gw_computation(data_list, ref_data, n_jobs=-1, use_gpu=True):
     n_jobs = multiprocessing.cpu_count() if n_jobs == -1 else n_jobs
     logger.info(f"Running parallel GW computation with {n_jobs} processes")
     
-    # Check if ref_data is a single dataset or a list matching data_list
     if isinstance(ref_data, list):
         if len(ref_data) != len(data_list):
             raise ValueError(f"Length mismatch: data_list ({len(data_list)}) vs ref_data ({len(ref_data)})")

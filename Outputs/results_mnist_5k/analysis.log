@@ -1,7 +1,0 @@
-2025-05-13 09:48:19,650 - INFO - === Starting plotting script ===
-2025-05-13 09:48:19,650 - INFO - All plots will be saved in both PDF and SVG formats
-2025-05-13 09:48:19,654 - INFO - Read 280 rows from results_mnist_5k/all_experiment_results.csv
-2025-05-13 09:48:19,655 - INFO - All required columns are present.
-2025-05-13 09:48:19,703 - INFO - Preprocessing complete. 280 rows remain.
-2025-05-13 09:48:19,704 - INFO - Found 1 base datasets: ['MNIST']
-2025-05-13 09:48:29,019 - INFO - === Done. ===

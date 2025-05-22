@@ -1,4 +1,9 @@
-# mnist_dataset.py
+"""
+mnist_dataset.py
+------------------------------
+Module for loading and processing the MNIST dataset with optimizations.
+
+"""
 
 import numpy as np
 import logging
@@ -42,16 +47,13 @@ def load_mnist_data(n_samples=10000, shuffle=True, random_state=42, use_memmap=T
         
         if stratify:
             logger.info("Performing stratified sampling by digit class")
-            # Get unique classes and their counts
             unique_classes = np.unique(labels)
             n_classes = len(unique_classes)
             
-            # Calculate how many samples to take from each class
             class_counts = np.array([np.sum(labels == c) for c in unique_classes])
             class_proportions = class_counts / np.sum(class_counts)
             samples_per_class = np.floor(class_proportions * n_samples).astype(int)
             
-            # Adjust for rounding errors to ensure exactly n_samples
             while np.sum(samples_per_class) < n_samples:
                 # Add the remaining samples to random classes
                 remaining = n_samples - np.sum(samples_per_class)

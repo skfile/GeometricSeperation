@@ -34,7 +34,6 @@ def parallel_context(n_jobs=None, backend='loky', temp_folder=None):
     try:
         yield n_jobs
     finally:
-        # Any cleanup operations here
         if temp_folder and os.path.exists(temp_folder):
             import shutil
             try:

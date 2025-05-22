@@ -1,9 +1,19 @@
 #!/usr/bin/env python3
 """
 main_experiment.py
-------------------
-Revised to handle 'offset' as an array in the configuration, where each 'offset' represents its own dataset.
-Optimized for parallel processing, frequent CSV appending, and enhanced logging.
+-----------------------------
+Core experiment pipeline for manifold separation threshold detection.
+
+This module implements the complete pipeline for testing the geometric threshold hypothesis:
+1. Dataset generation with controlled offsets between manifold components
+2. Subsampling with uniform, biased, or noisy methods
+3. Graph/kernel construction with various neighborhood methods
+4. Embedding computation using dimensionality reduction techniques
+5. Clustering of embeddings to detect component separation
+6. Evaluation using Gromov-Wasserstein distance and clustering metrics
+7. Result aggregation and storage
+
+The pipeline supports parallel processing and is configured via JSON files.
 """
 
 import os
@@ -16,6 +26,7 @@ import traceback
 import logging
 import matplotlib
 import time
+from typing import Dict, List, Any, Optional, Tuple, Union, Callable
 
 import multiprocessing.resource_tracker as _rt
 _rt.ResourceTracker.__del__ = lambda self: None  # silence resource_tracker cleanup errors
@@ -53,7 +64,6 @@ from src.utils import (
     normalize_distance_matrix,
 )
 
-# Import the new GW utilities - Fix import path
 try:
     from src.gw_utils import gromov_wasserstein, parallel_gw_computation, batch_gw_computation
     HAS_GW_UTILS = True
@@ -170,16 +180,13 @@ def compute_clusters(X, method, n_clusters=None, **kwargs):
         return spectral.fit_predict(X)
     
     elif method == 'hierarchical':
-        # Hierarchical clustering using SciPy's linkage and fcluster
         linkage_method = kwargs.get('linkage_method', 'ward')
         Z = linkage(X, method=linkage_method)
         if n_clusters is None:
-            # If n_clusters is not provided, use a distance criterion
             t = kwargs.get('t', 0.5)  # Distance threshold
             criterion = kwargs.get('criterion', 'distance')
             return fcluster(Z, t=t, criterion=criterion)
         else:
-            # Use the number of clusters
             return fcluster(Z, t=n_clusters, criterion='maxclust')
     
     else:
@@ -238,21 +245,45 @@ def compute_minimax_offset(X, labels):
     return float(np.max(min_dists))
 
 
-def run_experiment_for_dataset(dset_cfg, kernel_methods, embedding_methods, GW_loss_fun, clustering_cfg=None, n_jobs=1):
+def run_experiment_for_dataset(
+    dset_cfg: Dict[str, Any], 
+    kernel_methods: List[Dict[str, Any]],
+    embedding_methods: List[Dict[str, Any]], 
+    GW_loss_fun: str,
+    clustering_cfg: Optional[Dict[str, Any]] = None, 
+    n_jobs: int = 1
+) -> List[Dict[str, Any]]:
+    """
+    Run complete analysis pipeline for a single dataset configuration.
+    
+    Parameters
+    ----------
+    dset_cfg : Dict[str, Any]
+        Dataset configuration containing name, method, parameters and offset
+    kernel_methods : List[Dict[str, Any]]
+        List of kernel/graph construction methods to evaluate
+    embedding_methods : List[Dict[str, Any]]
+        List of embedding methods to evaluate
+    GW_loss_fun : str
+        Loss function for Gromov-Wasserstein calculations
+    clustering_cfg : Optional[Dict[str, Any]], default=None
+        Configuration for clustering methods
+    n_jobs : int, default=1
+        Number of parallel jobs
+        
+    Returns
+    -------
+    List[Dict[str, Any]]
+        Experiment results for all combinations of subsamples, kernels and embeddings
+    """
     logger.info(f"Processing Dataset: {dset_cfg['name']} with Offset: {dset_cfg.get('offset', 0.0)}")
     results = []
+    
     try:
-        # Ensure offset is properly handled before passing to generate_dataset_and_subsamples
         offset_value = dset_cfg.get('offset', 0.0)
         dset_cfg_copy = dset_cfg.copy()
         
-        # Make sure offset is correctly formatted regardless of how it will be used
-        # This addresses the broadcasting issue in hyperbolic shape generation
-        if isinstance(offset_value, (int, float)):
-            # No change needed, scalar offsets work fine
-            pass
-        elif isinstance(offset_value, (list, tuple, np.ndarray)):
-            # Ensure it's a numpy array
+        if isinstance(offset_value, (list, tuple, np.ndarray)):
             offset_value = np.asarray(offset_value)
             
         dset_cfg_copy['offset'] = offset_value
@@ -282,13 +313,9 @@ def run_experiment_for_dataset(dset_cfg, kernel_methods, embedding_methods, GW_l
         X_sub = ssub["X_sub"]
         idx_sub = ssub["indices_sub"]
         
-        # raw fill distance: max over min distances from each full point to the subsample
         ssub["fill_dist_orig"] = float(np.max(np.min(cdist(X_full, X_sub), axis=1)))
-        # scaled fill distance
         X_sub_scaled = scaler_fs.transform(X_sub)
         ssub["fill_dist_scaled"] = float(np.max(np.min(cdist(X_full_scaled, X_sub_scaled), axis=1)))
-        
-        # --- New: kNN fill distances for original (unscaled) data ---
         from sklearn.neighbors import NearestNeighbors
         nbrs_orig = NearestNeighbors(n_neighbors=min(k_knn+1, X_sub.shape[0]), algorithm='auto').fit(X_sub)
         distances_orig, _ = nbrs_orig.kneighbors(X_sub)
@@ -489,9 +516,6 @@ def run_experiment_for_dataset(dset_cfg, kernel_methods, embedding_methods, GW_l
         try:
             logger.info(f"Finished building kernel='{kname}' in {time.time() - t0:.2f}s. Now cleaning + shortest_path.")
             sub_adj = connected_comp_helper(sub_adj, X_sub, connect=True)
-            # # Apply |1 - e| transform for Gaussian kernel when computing GW metric
-            # if kname.lower().startswith('gaussian'):
-            #     sub_adj = np.abs(1 - sub_adj)
             sub_cost = shortest_path(sub_adj, directed=True)
             sub_cost = 0.5 * (sub_cost + sub_cost.T)
             sub_cost = preprocess_distance_matrix(sub_cost)

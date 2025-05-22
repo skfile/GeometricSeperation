@@ -1,4 +1,12 @@
-# kernels.py
+"""
+kernels.py
+-----------------------------
+Graph and kernel construction module for manifold separation analysis.
+
+This module provides functions to construct various similarity kernels and
+neighborhood graphs from point cloud data, including k-NN graphs, Gaussian
+kernels, and adaptive neighborhood methods.
+"""
 
 import numpy as np
 import pandas as pd
@@ -12,41 +20,84 @@ from scipy.spatial.distance import pdist, squareform
 
 logger = logging.getLogger(__name__)
 
-def ian_kernel(X):
+def ian_kernel(X: np.ndarray) -> np.ndarray:
+    """
+    Compute Iterated Adaptive Neighborhoods (IAN) kernel for the input data.
+    
+    Parameters
+    ----------
+    X : np.ndarray
+        Input data matrix of shape (n_samples, n_features)
+    
+    Returns
+    -------
+    np.ndarray
+        The IAN adjacency matrix as a dense array, or None if computation fails
+    """
     try:
         from ian.ian import IAN
         if X.shape[0] < 10:
             return None
-        G, wG, optScales, disc_pts = IAN('exact', X, verbose=0, obj = 'greedy')
+        G, wG, optScales, disc_pts = IAN('exact', X, verbose=0, obj='greedy')
         return wG.toarray()
     except Exception as e:
         print(f"IAN kernel error: {e}")
         return None
 
-def compute_gaussian_kernel(X, sigma):
+def compute_gaussian_kernel(X: np.ndarray, sigma: float) -> np.ndarray:
     """
-    Standard Gaussian (RBF) kernel with bandwidth sigma.
+    Compute the Gaussian (RBF) kernel matrix with bandwidth sigma.
+    
+    Parameters
+    ----------
+    X : np.ndarray
+        Input data matrix of shape (n_samples, n_features)
+    sigma : float
+        Bandwidth parameter controlling the kernel width
+        
+    Returns
+    -------
+    np.ndarray
+        Gaussian kernel matrix of shape (n_samples, n_samples)
     """
     D = squareform(pdist(X, 'sqeuclidean'))
     K = np.exp(-D / (2 * sigma**2))
     return K
 
 def compute_knn_shortest_path_kernel(
-    X, knn, shortest_path=False, pruning_method=None, metric='euclidean'
-):
+    X: np.ndarray, 
+    knn: int, 
+    shortest_path: bool = False, 
+    pruning_method: Optional[str] = None, 
+    metric: str = 'euclidean'
+) -> np.ndarray:
     """
-    Builds a k-NN graph with 'metric', optionally prunes or returns shortest-path distances.
-
-    If shortest_path=True => we return the NxN matrix of all-pairs shortest paths from that k-NN adjacency.
-    If pruning_method is not None => we prune the original k-NN graph using the chosen method and return adjacency.
-    Otherwise => returns the adjacency as a dense NxN matrix from kneighbors_graph (plus connectivity fixes).
+    Build a k-NN graph and optionally compute shortest paths or perform pruning.
+    
+    Parameters
+    ----------
+    X : np.ndarray
+        Input data matrix of shape (n_samples, n_features)
+    knn : int
+        Number of nearest neighbors to use
+    shortest_path : bool, default=False
+        If True, returns all-pairs shortest path distances instead of adjacency
+    pruning_method : str, optional
+        Method to prune the graph ('mst', 'density', 'bisection', etc.)
+    metric : str, default='euclidean'
+        Distance metric to use for nearest neighbor search
+        
+    Returns
+    -------
+    np.ndarray
+        Graph matrix as adjacency or shortest-path distances
     """
     # Validate metric
     valid_metrics = {
         'euclidean', 'manhattan', 'minkowski', 'chebyshev', 'cosine'
     }
     if not (callable(metric) or metric in valid_metrics):
-        logger.warning(f"[compute_knn_shortest_path_kernel] Invalid metric '{metric}'. Falling back to 'euclidean'.")
+        logger.warning(f"Invalid metric '{metric}'. Falling back to 'euclidean'.")
         metric = 'euclidean'
 
     if X.shape[0] < knn + 1:

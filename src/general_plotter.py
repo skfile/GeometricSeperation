@@ -2,7 +2,7 @@
 """
 general_plotter.py
 -----------------------------
-Generates a comprehensive set of visualizations for each dataset in your config, covering:
+Generates a set of visualizations for each dataset in your config, covering:
   1) Raw high-dimensional data (projected to 2D via PCA) as a matrix of subplots over (offset, fraction).
   2) For each embedding method in config, a matrix of subplots (offset x fraction) of the embedded data in 2D.
   3) A 3D plot of the ground-truth adjacency A_full (either in the original dimension if dim<=3, 
@@ -11,21 +11,10 @@ Generates a comprehensive set of visualizations for each dataset in your config,
 
 We place the offset on the rows, fraction on the columns.
 
-Features:
-  - Publication-quality plots suitable for NeurIPS/ICML submission
-  - SVG output of individual subplots for fine-grained control
-  - Support for MNIST and scRNA data
-  - Customizable color palettes and plot parameters
-  - Enhanced handling of noisy/biased data
-
 Usage:
   python general_plotter.py --config my_config.json [--output_dir my_plots/] [--plot_style neurips]
                            [--color_palette colorblind] [--svg_subplots]
 
-Dependencies:
-  - Uses your existing code from `mesh_sampling.py` for data generation.
-  - Also uses `kernel_dispatcher` from `src.kernels`.
-  - Built with HPC non-interactive plotting in mind (matplotlib 'Agg' backend).
 """
 
 import os
@@ -42,13 +31,13 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import numpy as np
 import pandas as pd
 import matplotlib
-matplotlib.use('Agg')  # Non-interactive backend
+matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-from mpl_toolkits.mplot3d import Axes3D  # needed for 3D plots
+from mpl_toolkits.mplot3d import Axes3D 
 from scipy.sparse.csgraph import shortest_path
 from scipy.spatial.distance import pdist
 import warnings
@@ -62,7 +51,6 @@ from src.embedding_algorithms import compute_embedding
 # CONFIGURATION CONSTANTS
 ##############################################################################
 
-# Plot styles available
 PLOT_STYLES = {
     "neurips": {
         # General settings
@@ -88,7 +76,6 @@ PLOT_STYLES = {
         "grid.alpha": 0.4,
     },
     "standard": {
-        # A more colorful and bolder style
         "figure.dpi": 300,
         "font.size": 10,
         "font.family": "sans-serif",
@@ -108,7 +95,6 @@ PLOT_STYLES = {
         "grid.alpha": 0.3,
     },
     "minimal": {
-        # Very clean, minimalist style
         "figure.dpi": 300,
         "font.size": 8,
         "font.family": "sans-serif",
@@ -133,7 +119,6 @@ PLOT_STYLES = {
     },
 }
 
-# Color palette options
 COLOR_PALETTES = {
     "colorblind": sns.color_palette("colorblind", 8),
     "neurips": [
@@ -158,10 +143,8 @@ COLOR_PALETTES = {
     "plasma": sns.color_palette("plasma", 8),
 }
 
-# Noise detection keywords - datasets with these terms are considered "noisy"
 NOISE_KEYWORDS = ["noisy", "noise", "perturb"]
 
-# Bias detection keywords - datasets with these terms are considered "biased"
 BIAS_KEYWORDS = ["bias", "biased"]
 
 ##############################################################################
@@ -175,16 +158,13 @@ def setup_logging(log_dir=None, level=logging.INFO):
     logger = logging.getLogger("general_plotter")
     logger.setLevel(level)
     
-    # Clear any existing handlers
     if logger.handlers:
         logger.handlers.clear()
         
-    # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
     logger.addHandler(console_handler)
     
-    # File handler (if log_dir is specified)
     if log_dir:
         os.makedirs(log_dir, exist_ok=True)
         timestamp = time.strftime("%Y%m%d-%H%M%S")
@@ -256,7 +236,6 @@ def build_kernel_adjacency(X, kname, kparams):
     if mat is None:
         return None
     mat = connected_comp_helper(mat, X, connect=True)
-    # We'll only interpret mat>0.0 as an edge
     return mat
 
 def embed_for_method(X, A, method):
@@ -305,7 +284,6 @@ def annotate_top_left(ax, text_str, fontsize=8):
     If `ax` is a 3D Axes, use `text2D`; if 2D, use `text`.
     """
     if isinstance(ax, Axes3D):
-        # For 3D axes, we have to place text in 2D coordinates with ax.text2D
         ax.text2D(
             0.02, 0.98,
             s=text_str,
@@ -336,10 +314,8 @@ def save_figure(fig, output_path, dpi=300, formats=None):
     if formats is None:
         formats = ['png']
     
-    # Make sure the directory exists
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
-    # Save in each requested format
     for fmt in formats:
         full_path = f"{output_path}.{fmt}"
         fig.savefig(full_path, dpi=dpi, bbox_inches='tight')
@@ -365,130 +341,105 @@ def save_subplot_as_svg(fig, ax, i, j, output_dir, base_name, suffix="", dpi=300
     filepath = os.path.join(output_dir, filename)
     
     try:
-        # Create a new figure with the same size as the subplot
         bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
         width, height = bbox.width, bbox.height
         fig_single = plt.figure(figsize=(width, height))
     
-    # Copy content from the subplot to new figure
-    ax_single = fig_single.add_subplot(111)
-    
-    # Copy main content by regenerating the plot
-    for line in ax.get_lines():
-        ax_single.plot(line.get_xdata(), line.get_ydata(), 
-                      color=line.get_color(), linestyle=line.get_linestyle(),
-                      linewidth=line.get_linewidth(), marker=line.get_marker(),
-                      markersize=line.get_markersize(), alpha=line.get_alpha(),
-                      label=line.get_label())
-    
-    # Copy scatter plots
-    for collection in ax.collections:
-        if hasattr(collection, 'get_offsets'):  # For scatter plots
-            try:
-                offsets = collection.get_offsets()
-                if len(offsets) > 0:
-                    # Handle facecolor properly
-                    try:
-                        c = collection.get_facecolor()
-                        # Check if it's empty or has the right format
-                        if not hasattr(c, 'size') or c.size == 0:
-                            c = 'b'
-                        # If it's a 2D array with multiple colors (one per point)
-                        elif len(c.shape) > 1 and c.shape[0] > 1:
-                            # Keep the colors as they are
-                            pass
-                        # If it's a single RGBA color
-                        else:
-                            # Use the first color (for consistency)
-                            c = c[0] if len(c) > 0 else 'b'
-                    except:
-                        c = 'b'
-                    
-                    # Handle sizes properly
-                    try:
-                        s = collection.get_sizes()
-                        if not hasattr(s, 'size') or s.size == 0:
-                            s = 20
-                        # If multiple sizes, keep them as is
-                        elif s.size > 1 and s.size == offsets.shape[0]:
-                            pass
-                        # If single size
-                        else:
-                            s = s[0] if len(s) > 0 else 20
-                    except:
-                        s = 20
-                    
-                    # Handle alpha properly
-                    alpha = collection.get_alpha() if collection.get_alpha() is not None else 1.0
-                    
-                    # Handle labels for legend
-                    label = collection.get_label() if hasattr(collection, 'get_label') else None
-                    if label == '_nolegend_':
-                        label = None
-                    
-                    # Handle edgecolors if present
-                    try:
-                        ec = collection.get_edgecolors()
-                        edgecolor = 'none' if ec.size == 0 else ec
-                    except:
-                        edgecolor = 'none'
-                        
-                    # Use 'color' parameter instead of 'c' to avoid deprecation warnings
-                    ax_single.scatter(offsets[:, 0], offsets[:, 1], 
-                                     color=c, s=s, alpha=alpha, label=label, 
-                                     edgecolor=edgecolor)
-            except Exception as e:
-                # Log the error but continue with other elements
-                import logging
-                logging.warning(f"Failed to copy scatter plot: {str(e)}")
-    
-    # Copy properties
-    ax_single.set_title(ax.get_title())
-    ax_single.set_xlabel(ax.get_xlabel())
-    ax_single.set_ylabel(ax.get_ylabel())
-    ax_single.set_xlim(ax.get_xlim())
-    ax_single.set_ylim(ax.get_ylim())
-
-    # Copy legend if present and if there are labeled artists
-    if ax.get_legend():
-        handles, labels = ax.get_legend_handles_labels()
-        if handles and labels:  # Only create legend if we have labeled items
-            ax_single.legend(handles, labels)
-    
-    # Copy text annotations
-    for text in ax.texts:
-        bbox_props = None
-        if hasattr(text, '_bbox_patch') and text._bbox_patch is not None:
-            # Create a new bbox properties dictionary instead of copying the boxstyle object directly
-            try:
-                # Extract style properties safely
-                boxstyle = text._bbox_patch.get_boxstyle().name if hasattr(text._bbox_patch.get_boxstyle(), 'name') else 'round'
-                
-                bbox_props = dict(
-                    boxstyle=boxstyle,
-                    fc=text._bbox_patch.get_facecolor(),
-                    ec=text._bbox_patch.get_edgecolor(),
-                    alpha=text._bbox_patch.get_alpha() if hasattr(text._bbox_patch, 'get_alpha') else 1.0,
-                    pad=0.3  # Default padding if not specified
-                )
-            except Exception as e:
-                # Fallback to a simple bounding box if extraction fails
-                import logging
-                logging.warning(f"Failed to copy text bbox properties: {str(e)}")
-                bbox_props = dict(boxstyle='round', fc='white', ec='gray', alpha=0.7)
+        ax_single = fig_single.add_subplot(111)
         
-        ax_single.text(text.get_position()[0], text.get_position()[1], text.get_text(),
-                      transform=ax_single.transAxes if text.get_transform() == ax.transAxes else None,
-                      ha=text.get_ha(), va=text.get_va(), fontsize=text.get_fontsize(),
-                      bbox=bbox_props)
+        for line in ax.get_lines():
+            ax_single.plot(line.get_xdata(), line.get_ydata(), 
+                          color=line.get_color(), linestyle=line.get_linestyle(),
+                          linewidth=line.get_linewidth(), marker=line.get_marker(),
+                          markersize=line.get_markersize(), alpha=line.get_alpha(),
+                          label=line.get_label())
+        
+        for collection in ax.collections:
+            if hasattr(collection, 'get_offsets'):  # For scatter plots
+                try:
+                    offsets = collection.get_offsets()
+                    if len(offsets) > 0:
+                        try:
+                            c = collection.get_facecolor()
+                            if not hasattr(c, 'size') or c.size == 0:
+                                c = 'b'
+                            elif len(c.shape) > 1 and c.shape[0] > 1:
+                                pass
+                            else:
+                                c = c[0] if len(c) > 0 else 'b'
+                        except:
+                            c = 'b'
+                        
+                        try:
+                            s = collection.get_sizes()
+                            if not hasattr(s, 'size') or s.size == 0:
+                                s = 20
+                            elif s.size > 1 and s.size == offsets.shape[0]:
+                                pass
+                            else:
+                                s = s[0] if len(s) > 0 else 20
+                        except:
+                            s = 20
+                        
+                        alpha = collection.get_alpha() if collection.get_alpha() is not None else 1.0
+                        
+                        label = collection.get_label() if hasattr(collection, 'get_label') else None
+                        if label == '_nolegend_':
+                            label = None
+                        
+                        try:
+                            ec = collection.get_edgecolors()
+                            edgecolor = 'none' if ec.size == 0 else ec
+                        except:
+                            edgecolor = 'none'
+                            
+                        ax_single.scatter(offsets[:, 0], offsets[:, 1], 
+                                         color=c, s=s, alpha=alpha, label=label, 
+                                         edgecolor=edgecolor)
+                except Exception as e:
+                    import logging
+                    logging.warning(f"Failed to copy scatter plot: {str(e)}")
+        
+        ax_single.set_title(ax.get_title())
+        ax_single.set_xlabel(ax.get_xlabel())
+        ax_single.set_ylabel(ax.get_ylabel())
+        ax_single.set_xlim(ax.get_xlim())
+        ax_single.set_ylim(ax.get_ylim())
+
+        if ax.get_legend():
+            handles, labels = ax.get_legend_handles_labels()
+            if handles and labels:  # Only create legend if we have labeled items
+                ax_single.legend(handles, labels)
+        
+        for text in ax.texts:
+            bbox_props = None
+            if hasattr(text, '_bbox_patch') and text._bbox_patch is not None:
+                try:
+                    boxstyle = text._bbox_patch.get_boxstyle().name if hasattr(text._bbox_patch.get_boxstyle(), 'name') else 'round'
+                    
+                    bbox_props = dict(
+                        boxstyle=boxstyle,
+                        fc=text._bbox_patch.get_facecolor(),
+                        ec=text._bbox_patch.get_edgecolor(),
+                        alpha=text._bbox_patch.get_alpha() if hasattr(text._bbox_patch, 'get_alpha') else 1.0,
+                        pad=0.3  # Default padding if not specified
+                    )
+                except Exception as e:
+                    import logging
+                    logging.warning(f"Failed to copy text bbox properties: {str(e)}")
+                    bbox_props = dict(boxstyle='round', fc='white', ec='gray', alpha=0.7)
+            
+            ax_single.text(text.get_position()[0], text.get_position()[1], text.get_text(),
+                          transform=ax_single.transAxes if text.get_transform() == ax.transAxes else None,
+                          ha=text.get_ha(), va=text.get_va(), fontsize=text.get_fontsize(),
+                          bbox=bbox_props)
     
-        # Save the figure
         fig_single.savefig(filepath, dpi=dpi, bbox_inches='tight', format='svg')
         plt.close(fig_single)
         logger.debug(f"Saved subplot SVG: {filepath}")
+        
     except Exception as e:
         logger.error(f"Error saving subplot to SVG for {base_name} subplot ({i},{j}): {str(e)}")
-        # Clean up in case of failure
         try:
             plt.close(fig_single)
         except:
@@ -519,10 +470,8 @@ def plot_3d_graph(X3d, A, title, outpng, max_edges=2000, save_svg=False, output_
 
     plt.tight_layout()
     
-    # Save file
     plt.savefig(outpng, dpi=300, bbox_inches='tight')
     
-    # Optionally save SVG version
     if save_svg and output_dir and base_name:
         svg_filename = os.path.join(output_dir, f"{base_name}_3D_groundtruth.svg")
         plt.savefig(svg_filename, dpi=300, bbox_inches='tight', format='svg')
@@ -553,11 +502,9 @@ def plot_dataset_matrix(data_map, d_name, offsets, fractions, results_dir, color
     """
     logger.info(f"Creating raw high-dimensional data matrix for {d_name}...")
     
-    # Create figure
     fig_hd, axes_hd = plot_matrix_rows_cols(offsets, fractions, figsize=(4,3), sharex=False, sharey=False)
     fig_hd.suptitle(f"{d_name} - Raw HD data (PCA(2)) matrix", fontsize=14)
     
-    # SVG output directory
     if save_svg:
         svg_dir = os.path.join(results_dir, f"{d_name}_subplots_hddata")
         os.makedirs(svg_dir, exist_ok=True)
@@ -572,13 +519,11 @@ def plot_dataset_matrix(data_map, d_name, offsets, fractions, results_dir, color
         Xf_off = dd_off["X_full"]
         subs_off = dd_off["sub_samples"]
 
-        # Skip if data is empty
         if Xf_off is None or not hasattr(Xf_off, 'shape') or Xf_off.shape[0] < 2:
             for j, frac in enumerate(fractions):
                 axes_hd[i][j].text(0.5, 0.5, "(no data)", ha='center', va='center', transform=axes_hd[i][j].transAxes, color='red')
             continue
 
-        # Project to 2D
         try:
             Xf_2d = pca_2d(Xf_off)
         except Exception as e:
@@ -591,15 +536,12 @@ def plot_dataset_matrix(data_map, d_name, offsets, fractions, results_dir, color
             ax = axes_hd[i][j]
             ax.set_title(f"offset={off}, frac={frac}", fontsize=10)
 
-            # Not enough points
             if Xf_2d.shape[0] < 2:
                 ax.text(0.5, 0.5, "(not enough points)", ha='center', va='center', transform=ax.transAxes, color='red')
                 continue
                 
-            # Scatter full dataset
             scatter_2d(ax, Xf_2d, color=color_palette[0], label='Full', alpha=0.5, size=6)
 
-            # Find sub-sample for this fraction
             sub_idx = None
             sub_method = None
             for ssub in subs_off:
@@ -622,7 +564,6 @@ def plot_dataset_matrix(data_map, d_name, offsets, fractions, results_dir, color
             if i==0 and j==0:
                 ax.legend(fontsize=7, loc='best')
                 
-            # Save individual subplot as SVG
             if save_svg:
                 save_subplot_as_svg(fig_hd, ax, i, j, svg_dir, d_name, suffix="_hddata")
 
@@ -630,7 +571,6 @@ def plot_dataset_matrix(data_map, d_name, offsets, fractions, results_dir, color
     fig_hd.tight_layout(rect=[0,0,1,0.95])
     fig_hd.savefig(out_hd_png, dpi=300, bbox_inches='tight')
     
-    # Optionally save as SVG as well
     if save_svg:
         out_hd_svg = os.path.join(results_dir, f"{d_name}_matrix_hddata.svg")
         fig_hd.savefig(out_hd_svg, format='svg', bbox_inches='tight')
@@ -644,11 +584,9 @@ def plot_embedding_matrix(data_map, d_name, offsets, fractions, results_dir, emb
     """
     logger.info(f"Building matrix of subplots for embedding method='{emb_method}' ...")
     
-    # Create figure
     fig_emb, axes_emb = plot_matrix_rows_cols(offsets, fractions, figsize=(4,3), sharex=False, sharey=False)
     fig_emb.suptitle(f"{d_name} - Embedding '{emb_method}' matrix", fontsize=14)
     
-    # SVG output directory
     if save_svg:
         svg_dir = os.path.join(results_dir, f"{d_name}_subplots_{emb_method}")
         os.makedirs(svg_dir, exist_ok=True)
@@ -662,10 +600,8 @@ def plot_embedding_matrix(data_map, d_name, offsets, fractions, results_dir, emb
         Af_off = dd_off["A_full"]
         subs_off = dd_off["sub_samples"]
 
-        # Embed in 2D
         emb_2d = embed_for_method(Xf_off, Af_off, emb_method)
         if emb_2d is None:
-            # Skip entire row
             for j, frac in enumerate(fractions):
                 axes_emb[i][j].text(0.5, 0.5, "(embedding failed)", ha='center', va='center', transform=axes_emb[i][j].transAxes, color='red')
             continue
@@ -675,7 +611,6 @@ def plot_embedding_matrix(data_map, d_name, offsets, fractions, results_dir, emb
             ax.set_title(f"offset={off}, frac={frac}", fontsize=10)
             scatter_2d(ax, emb_2d, color=color_palette[0], label='Full', alpha=0.5, size=6)
             
-            # Sub-sample highlight
             sub_idx = None
             sub_method = None
             for ssub in subs_off:
@@ -693,7 +628,6 @@ def plot_embedding_matrix(data_map, d_name, offsets, fractions, results_dir, emb
             if i==0 and j==0:
                 ax.legend(fontsize=7, loc='best')
                 
-            # Save individual subplot as SVG
             if save_svg:
                 save_subplot_as_svg(fig_emb, ax, i, j, svg_dir, d_name, suffix=f"_{emb_method}")
 
@@ -701,7 +635,6 @@ def plot_embedding_matrix(data_map, d_name, offsets, fractions, results_dir, emb
     fig_emb.tight_layout(rect=[0,0,1,0.95])
     fig_emb.savefig(out_emb_png, dpi=300, bbox_inches='tight')
     
-    # Optionally save as SVG as well
     if save_svg:
         out_emb_svg = os.path.join(results_dir, f"{d_name}_matrix_{emb_method}.svg")
         fig_emb.savefig(out_emb_svg, format='svg', bbox_inches='tight')
@@ -715,7 +648,6 @@ def plot_kernel_matrix(data_map, d_name, offsets, fractions, results_dir, kname,
     """
     logger.info(f"Building matrix of kernel='{kname}' adjacency for each (offset, fraction) ...")
     
-    # Create figure
     fig_kern, axes_kern = plot_matrix_rows_cols(offsets, fractions, figsize=(4,3), sharex=False, sharey=False)
     fig_kern.suptitle(f"{d_name} - Kernel='{kname}' adjacency (sub-samples)", fontsize=14)
     
@@ -758,15 +690,12 @@ def plot_kernel_matrix(data_map, d_name, offsets, fractions, results_dir, kname,
                     ax.text(0.5,0.5,"(kernel returned None)",ha='center',va='center',transform=ax.transAxes)
                     continue
 
-                # PCA(2) on X_sub
                 X_sub_2d = pca_2d(X_sub)
                 scatter_2d(ax, X_sub_2d, color=color_palette[2], alpha=0.9, size=10)
 
-                # Overlay edges
                 plot_adjacency_on_embedding(ax, X_sub_2d, K_mat, max_edges=2000)
                 annotate_top_left(ax, f"N={len(X_sub)}")
                 
-                # Save individual subplot as SVG
                 if save_svg:
                     save_subplot_as_svg(fig_kern, ax, i, j, svg_dir, d_name, suffix=f"_kernel_{kname}")
 
@@ -778,7 +707,6 @@ def plot_kernel_matrix(data_map, d_name, offsets, fractions, results_dir, kname,
     fig_kern.tight_layout(rect=[0,0,1,0.95])
     fig_kern.savefig(out_kern_png, dpi=300, bbox_inches='tight')
     
-    # Optionally save as SVG as well
     if save_svg:
         out_kern_svg = os.path.join(results_dir, f"{d_name}_matrix_kernel_{kname}.svg")
         fig_kern.savefig(out_kern_svg, format='svg', bbox_inches='tight')
@@ -793,7 +721,6 @@ def process_dataset(dset, config, results_dir, color_palette, save_svg=False):
     d_name = dset.get("name", "UnnamedDataset")
     logger.info(f"\n=== PROCESSING DATASET: {d_name} ===")
     
-    # Special handling for different dataset types
     dataset_note = ""
     if is_noisy_dataset(d_name):
         dataset_note += " [NOISY]"
@@ -806,7 +733,6 @@ def process_dataset(dset, config, results_dir, color_palette, save_svg=False):
     if dataset_note:
         logger.info(f"Dataset characteristics:{dataset_note}")
     
-    # Expand offsets from the dataset
     offsets = dset.get("offset", [0.0])
     if not isinstance(offsets, list):
         offsets = [offsets]
@@ -815,15 +741,12 @@ def process_dataset(dset, config, results_dir, color_palette, save_svg=False):
     if not isinstance(fractions, list):
         fractions = [fractions]
     
-    # Create data container
     data_map = {}
 
     for off in offsets:
-        # Create a copy of the dataset config, set offset
         dcopy = dict(dset)
         dcopy["offset"] = off
         
-        # Possibly remove offset from gaussian_cfg if needed
         if dcopy.get("type", "") == "gaussian_tsep" and "gaussian_cfg" in dcopy:
             dcopy["gaussian_cfg"] = dict(dcopy["gaussian_cfg"])
             dcopy["gaussian_cfg"].pop("offset", None)
@@ -835,12 +758,10 @@ def process_dataset(dset, config, results_dir, color_palette, save_svg=False):
             logger.error(f"Error generating dataset offset={off}: {e}")
             continue
 
-        # Extract data from results
         Xf = dd.get("X_full", None)
         Af = dd.get("A_full", None)
         subs = dd.get("sub_samples", [])
 
-        # Skip if data is invalid
         if Xf is None or not hasattr(Xf, 'shape') or Xf.shape[0] < 2:
             logger.warning(f"X_full is empty or invalid for offset={off}, skipping plots for this offset.")
             data_map[(off)] = None
@@ -848,15 +769,12 @@ def process_dataset(dset, config, results_dir, color_palette, save_svg=False):
             
         data_map[(off)] = dd
 
-    # 1. Plot raw high-dimensional data matrix
     plot_dataset_matrix(data_map, d_name, offsets, fractions, results_dir, color_palette, save_svg)
     
-    # 2. Plot embedding matrices for each embedding method
     embedding_methods = config.get("embedding_methods", [])
     for emb_method in embedding_methods:
         plot_embedding_matrix(data_map, d_name, offsets, fractions, results_dir, emb_method, color_palette, save_svg)
     
-    # 3. Plot 3D ground-truth adjacency for each offset
     for off in offsets:
         dd_off = data_map.get(off)
         if dd_off is None:
@@ -869,7 +787,6 @@ def process_dataset(dset, config, results_dir, color_palette, save_svg=False):
         Xf_3d = pca_3d(Xf_off)
         out_3d_png = os.path.join(results_dir, f"{d_name}_offset_{off}_3D_groundtruth.png")
         
-        # Create SVG subdirectory for 3D plots
         svg_dir = None
         if save_svg:
             svg_dir = os.path.join(results_dir, f"{d_name}_3D_plots")
@@ -881,7 +798,6 @@ def process_dataset(dset, config, results_dir, color_palette, save_svg=False):
         
         logger.info(f"Saved 3D ground-truth adjacency => {out_3d_png}")
     
-    # 4. Plot kernel adjacency matrices for each kernel method
     kernel_methods = config.get("kernel_methods", [])
     for km in kernel_methods:
         kname = km["name"]
@@ -911,7 +827,6 @@ def main():
                        help="Set logging level.")
     args = parser.parse_args()
 
-    # Validate and load config file
     if not os.path.exists(args.config):
         print(f"Error: Config file not found: {args.config}")
         sys.exit(1)
@@ -923,13 +838,11 @@ def main():
             print(f"Error: Invalid JSON in config file: {args.config}")
             sys.exit(1)
 
-    # Set up results directory
     results_dir = config.get("results_dir", "results_plots")
     if args.output_dir:
         results_dir = args.output_dir
     os.makedirs(results_dir, exist_ok=True)
     
-    # Set up logging
     log_dir = os.path.join(results_dir, "logs")
     log_level = getattr(logging, args.log_level.upper())
     global logger
@@ -940,14 +853,11 @@ def main():
     logger.info(f"Using plot style: {args.plot_style}")
     logger.info(f"Using color palette: {args.color_palette}")
     
-    # Apply plotting style
     plt.style.use('default')  # Reset to default first
     plt.rcParams.update(PLOT_STYLES[args.plot_style])
     
-    # Get color palette
     color_palette = COLOR_PALETTES[args.color_palette]
     
-    # Process each dataset
     datasets = config.get("datasets", [])
     if not datasets:
         logger.warning("No datasets found in config file!")

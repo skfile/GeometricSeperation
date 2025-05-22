@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """
 metrics.py
------------
-Implements Gromov-Wasserstein, Gromov-Hausdorff approximation,
-and single-linkage ultrametric-based GH approximation.
+-----------------------------
+Distance and metric computation for manifold geometry comparison.
+
+This module implements distance metrics for comparing manifold geometries, including:
+- Gromov-Wasserstein distance for comparing metric measure spaces
+- Gromov-Hausdorff approximation for measuring distance between metric spaces
+- Single-linkage ultrametric construction for hierarchical comparison
 """
 
 import numpy as np
@@ -20,13 +24,46 @@ import os
 # 1) Gromov-Wasserstein
 ##########################################################
 
-def compute_gromov_wasserstein(C1, C2, p, q, loss_fun='square_loss',
-                               max_iter=10000, tol=1e-4):
+def compute_gromov_wasserstein(
+    C1: np.ndarray, 
+    C2: np.ndarray, 
+    p: np.ndarray = None, 
+    q: np.ndarray = None, 
+    loss_fun: str = 'square_loss',
+    max_iter: int = 10000, 
+    tol: float = 1e-4
+) -> float:
     """
-    Use POT library for Gromov-Wasserstein cost between cost/distance matrices C1, C2.
-    p, q are distributions over the two sets.
-    Returns the GW cost (NOT the sqrt).
+    Compute Gromov-Wasserstein distance between two metric measure spaces.
+    
+    Parameters
+    ----------
+    C1 : np.ndarray
+        First cost/distance matrix
+    C2 : np.ndarray
+        Second cost/distance matrix
+    p : np.ndarray, optional
+        Distribution over the first space (uniform if None)
+    q : np.ndarray, optional
+        Distribution over the second space (uniform if None)
+    loss_fun : str, default='square_loss'
+        Type of loss function ('square_loss', 'kl_loss')
+    max_iter : int, default=10000
+        Maximum number of iterations in the optimization
+    tol : float, default=1e-4
+        Convergence tolerance
+        
+    Returns
+    -------
+    float
+        The Gromov-Wasserstein cost (not the square root)
     """
+    # Handle default uniform distributions
+    if p is None:
+        p = np.ones(C1.shape[0]) / C1.shape[0]
+    if q is None:
+        q = np.ones(C2.shape[0]) / C2.shape[0]
+        
     gw_cost = ot.gromov.gromov_wasserstein2(
         C1, C2, p, q,
         loss_fun=loss_fun,
@@ -35,10 +72,27 @@ def compute_gromov_wasserstein(C1, C2, p, q, loss_fun='square_loss',
     )
     return gw_cost
 
-def compute_gromov_hausdorff_approx(X, Y, metric='euclidean'):
+def compute_gromov_hausdorff_approx(X: np.ndarray, Y: np.ndarray, metric: str = 'euclidean') -> float:
     """
-    Approx GH distance ~ sqrt(GW). Return raw GW cost from NxD data X, Y.
-    If you want the GH distance, do sqrt() of the returned cost.
+    Approximate the Gromov-Hausdorff distance between two point clouds.
+    
+    Computes an approximation to the Gromov-Hausdorff distance using
+    the Gromov-Wasserstein distance with uniform distributions.
+    
+    Parameters
+    ----------
+    X : np.ndarray
+        First point cloud, shape (n_samples_X, n_features)
+    Y : np.ndarray
+        Second point cloud, shape (n_samples_Y, n_features)
+    metric : str, default='euclidean'
+        Distance metric to use
+        
+    Returns
+    -------
+    float
+        Approximation to the GH distance (raw GW cost, not sqrt)
+        To get the GH distance approximation, take the square root
     """
     distX = pdist(X, metric=metric)
     distY = pdist(Y, metric=metric)

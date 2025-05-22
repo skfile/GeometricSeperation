@@ -1,6 +1,0 @@
-2025-05-10 13:31:59,020 - INFO - === Starting plotting script ===
-2025-05-10 13:31:59,066 - INFO - Read 7840 rows from results_main_1_noisy/all_experiment_results.csv
-2025-05-10 13:31:59,067 - INFO - All required columns are present.
-2025-05-10 13:32:00,319 - INFO - Preprocessing complete. 7840 rows remain.
-2025-05-10 13:32:00,320 - INFO - Found 2 base datasets: ['Shapes2d', 'Shapes5d']
-2025-05-10 13:33:04,622 - INFO - === Done. ===

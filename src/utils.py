@@ -1,3 +1,9 @@
+"""
+utils.py
+-----------------------------
+Utility functions for data processing, distance matrix handling, and graph connectivity.
+"""
+
 import numpy as np
 from typing import Optional, Tuple
 from scipy.sparse.csgraph import connected_components
@@ -91,14 +97,12 @@ def remove_duplicates(X: np.ndarray, tol: float = 1e-8) -> Tuple[np.ndarray, np.
     """
     if X.ndim != 2:
         raise ValueError(f"X must be 2D, shape={X.shape}")
-    # naive approach: sort, find diffs
     sorted_idx = np.lexsort(np.argsort(X, axis=1))
     sorted_X = X[sorted_idx]
     diffs = np.diff(sorted_X, axis=0)
     dist = np.linalg.norm(diffs, axis=1)
     keep_mask = np.insert(dist > tol, 0, True)
     X_unique = sorted_X[keep_mask]
-    # Re-map to original indices
     unique_indices = np.where(keep_mask)[0]
     return X_unique, unique_indices
 

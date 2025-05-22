@@ -38,7 +38,6 @@ def load_scRNA_data(data_dir="scRNA_data", n_samples=None, shuffle=True, random_
     X: array of shape (n_cells, n_genes) - expression data
     cell_types: array of cell type labels (if metadata available)
     """
-    # Set up paths
     expression_path = os.path.join(data_dir, "expression_matrix.npz")
     metadata_path = os.path.join(data_dir, "cell_metadata.csv")
     
@@ -64,11 +63,9 @@ def load_scRNA_data(data_dir="scRNA_data", n_samples=None, shuffle=True, random_
             X = sp.csr_matrix((expr_data['data'], expr_data['indices'], expr_data['indptr']), 
                               shape=tuple(expr_data['shape']))
         
-        # Convert to dense array for easier processing
         logger.info("Converting sparse matrix to dense array...")
         X = X.toarray()
     else:
-        # Try direct loading as a dense array
         X = expr_data['data'] if 'data' in expr_data else expr_data['X']
     
     # Load metadata if available for stratification

@@ -1,4 +1,9 @@
-# graph_methods.py
+"""
+graph_methods.py
+-----------------------------
+Module for graph-based methods for clustering and pruning, as described in the paper.
+
+"""
 
 import numpy as np
 import networkx as nx

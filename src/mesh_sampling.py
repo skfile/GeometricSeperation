@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
-
 """
-mesh_sampling_revised.py
----------------------------
-Generates data sets (union-of-shapes, simplex-based Gaussians, or MNIST) plus
-subsamples (uniform or biased). Builds adjacency using multiple possible methods.
+mesh_sampling.py
+-----------------------------
+Dataset generation and sampling module for manifold separation experiments.
 
-Key changes/fixes:
- - The code is largely the same, but we ensure offsets are used properly.
- - We unify adjacency construction and ensure it is block-diagonal for union-of-shapes.
+This module handles generation of synthetic datasets (geometric shapes), 
+subsampling of data points, and construction of adjacency matrices.
 """
 
 import numpy as np
@@ -42,9 +39,40 @@ logger.addHandler(handler)
 POTENTIAL_REGISTRY = {}
 
 def potential_distance_origin(x: np.ndarray, scale: float = 1.0) -> float:
+    """
+    Calculate squared Euclidean distance from origin, scaled by a factor.
+    
+    Parameters
+    ----------
+    x : np.ndarray
+        Input point coordinates
+    scale : float, default=1.0
+        Scaling factor
+        
+    Returns
+    -------
+    float
+        Scaled squared distance from origin
+    """
     return (np.linalg.norm(x) ** 2) / scale
 
-def potential_offset(x: np.ndarray, offset=0.0):
+
+def potential_offset(x: np.ndarray, offset: float = 0.0) -> float:
+    """
+    Calculate Euclidean norm after adding a constant offset.
+    
+    Parameters
+    ----------
+    x : np.ndarray
+        Input point coordinates
+    offset : float, default=0.0
+        Constant to add to all coordinates
+        
+    Returns
+    -------
+    float
+        Euclidean norm of offset point
+    """
     y = x.copy()
     y += offset
     return np.linalg.norm(y)
@@ -96,7 +124,7 @@ def generate_hd_ellipsoid(dim: int, axes: List[float], n_points: Optional[int], 
     X *= (r * np.array(axes))
     if offset is not None:
         offset = np.asarray(offset).reshape(1, -1)  # Ensure offset is a 2D array with shape (1, dim)
-        X = X + offset  # Broadcasting will now work correctly
+        X = X + offset 
     return X
 
 def generate_hd_torus(dim: int, major_radius: float, minor_radius: float, n_points: Optional[int],
@@ -105,7 +133,7 @@ def generate_hd_torus(dim: int, major_radius: float, minor_radius: float, n_poin
         raise ValueError("Torus dimension must be at least 2.")
     if n_points is None:
         n_points = 1000
-    # Basic param for 2D ring in the first 2 dims, plus random circle for higher dims
+    
     angles = rng.uniform(0, 2*np.pi, size=n_points)
     circle2d = np.zeros((n_points, 2))
     circle2d[:, 0] = (major_radius + minor_radius * np.cos(angles)) * 1.0
@@ -126,7 +154,7 @@ def generate_hd_torus(dim: int, major_radius: float, minor_radius: float, n_poin
 
     if offset is not None:
         offset = np.asarray(offset).reshape(1, -1)  # Ensure offset is a 2D array with shape (1, dim)
-        X = X + offset  # Broadcasting will now work correctly
+        X = X + offset 
     return X
 
 def generate_hd_hyperbolic(dim: int, radius: float, curvature: float, n_points: Optional[int], 
@@ -199,7 +227,7 @@ def generate_simplex_vertices(dim: int, scale: float = 1.0) -> np.ndarray:
     # measure the edge length
     from scipy.spatial.distance import pdist
     edge_length = np.mean(pdist(vertices))
-    # scale so that the average edge is ~ `scale`. You can do it differently if desired.
+    # scale so that the average edge is ~ `scale`
     if edge_length < 1e-15:
         edge_length = 1.0
     factor = scale / edge_length
@@ -254,11 +282,9 @@ def generate_simplex_gaussian_mixture(cfg: dict, rng: np.random.Generator) -> Tu
     if len(sigma_max_list) != n_components:
         raise ValueError("sigma_max_list must match n_points_per_gauss in length.")
 
-    # We create the set of dim+1 vertices
     full_simplex_vertices = generate_simplex_vertices(dim, scale=offset)
     num_vertices = dim + 1
 
-    # If we have more Gaussians than vertices, we pick with replacement
     if n_components <= num_vertices:
         chosen_indices = rng.choice(num_vertices, size=n_components, replace=False)
     else:
@@ -282,7 +308,7 @@ def generate_simplex_gaussian_mixture(cfg: dict, rng: np.random.Generator) -> Tu
 
     X_full = np.vstack(blocks)
     from scipy.sparse import block_diag
-    # keep adjacency sparse for efficient graph algorithms
+
     A_full = block_diag(adj_blocks)
 
     return X_full, A_full, np.array(labels, dtype=int)
@@ -324,7 +350,7 @@ def build_adjacency_threshold(X: np.ndarray, radius: float, parallelize: bool = 
 
 def build_adjacency_convexhull(X: np.ndarray, iterative_passes: int = 1) -> np.ndarray:
     """
-    Very rough approach: we take random subsets -> find hull edges -> place them in adjacency.
+    Approach: we take random subsets -> find hull edges -> place them in adjacency.
     """
     N = X.shape[0]
     adjacency = np.zeros((N, N), dtype=float)
@@ -386,7 +412,6 @@ def generate_union_data_revised(shapes: List[dict], adjacency_method: str, adjac
     else:
         dim_for_offset = max([s["dim"] for s in shapes])
         # we embed them in a (k-1)-D simplex, then possibly pad to shape's dimension
-        # For simplicity we'll just do a high-level approach:
         # generate (k-1)+1 = k vertices in dimension k-1
         # scale by 'offset'
         if (k-1) < 1:
@@ -415,7 +440,6 @@ def generate_union_data_revised(shapes: List[dict], adjacency_method: str, adjac
         
         # Get center for this shape and ensure it's the right shape
         if i < len(simplex_vertices):
-            # Extract only the dimensions we need for this shape
             center = np.zeros(d)
             center_slice = simplex_vertices[i][:d]
             center[:len(center_slice)] = center_slice
@@ -592,7 +616,7 @@ def generate_dataset_and_subsamples(config: dict) -> dict:
     elif adjacency_method == "convexhull":
         adjacency_param["iterative_passes"] = config.get("hull_passes", 1)
     else:
-        pass  # or raise?
+        pass
 
     if data_type_l == "unions_of_shapes":
         shapes = config["shapes"]
@@ -635,8 +659,6 @@ def generate_dataset_and_subsamples(config: dict) -> dict:
         A_full = build_shape_adjacency(X_full, adjacency_method, adjacency_param)
         labels = y_mnist
         
-        # For MNIST, we'll use the minimax offset between digit clusters as sep_distance
-        # The actual computation will happen in the general minimax offset section
         sep_distance = None
         logger.info(f"Loaded MNIST data with {X_full.shape[0]} samples, {len(np.unique(labels))} classes")
     else:
@@ -733,7 +755,6 @@ def generate_dataset_and_subsamples(config: dict) -> dict:
             # For MNIST datasets, ensure all digit classes are represented in the subsample
             if data_type_l == "mnist" and labels is not None:
                 # Only apply if we have a reasonable number of samples
-                # (at least 10 for one from each class)
                 if n_sub >= 10:
                     logger.info(f"Ensuring all MNIST digit classes (0-9) are represented in the subsample")
                     idx_sub = ensure_all_mnist_classes(idx_sub, labels, num_classes=10, random_state=rng)

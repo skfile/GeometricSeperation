@@ -10,7 +10,6 @@ from typing import Tuple, Optional, List
 import logging
 
 from src.dataset_funcs import (
-    # e.g., spiral, crown, stingray, cat_plane, spin_top
     dset_grid_spiral, dset_spin_top, dset_stingray, dset_crown, dset_grid_cat_plane
 )
 from src.mesh_sampling import (
@@ -48,7 +47,6 @@ def sample_biased(X: np.ndarray, colors: np.ndarray, fraction: float = 1.0, seed
     if not (0 < fraction <= 1.0):
         raise ValueError("fraction must be in the interval (0, 1].")
 
-    # Probability from colors => e.g., exp(-colors)
     raw = np.exp(-colors)
     ssum = raw.sum()
     if ssum < 1e-14:
@@ -125,7 +123,6 @@ def sample_data_manifold(
     if method == "biased" and not potential_name:
         raise ValueError("For 'biased' sampling, must provide 'potential_name'.")
 
-    # Possibly load potential func
     potential_func = None
     if method == "biased":
         potential_func = get_potential_func(potential_name, potential_params)
@@ -135,13 +132,11 @@ def sample_data_manifold(
     shape_kwargs = dict(kwargs)
     name_lower = name.lower()
 
-    # If shape like 'k_sphere' or '4d_simplex' wants total_points for n_points or n_vertices
     if name_lower == "k_sphere" and 'n_points' not in shape_kwargs:
         shape_kwargs['n_points'] = total_points
     elif name_lower == "4d_simplex" and 'n_vertices' not in shape_kwargs:
         shape_kwargs['n_vertices'] = total_points
 
-    # Generate the shape
     try:
         shape_obj = get_mesh_or_complex(name_lower, **shape_kwargs)
         if shape_obj is None:
@@ -208,7 +203,7 @@ def sample_data_general(
     noise: bool = False
 ) -> Tuple:
     """
-    Samples data from general (non-manifold) datasets such as spirals, crowns, etc.
+    LEGACY IMPLEMENTATION: Samples data from general (non-manifold) datasets such as spirals, crowns, etc.
     Returns (X_full, X_sample, colors_full, colors_sample).
     """
     name_lower = name.lower()

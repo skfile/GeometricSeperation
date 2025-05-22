@@ -43,7 +43,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from src.mnist_dataset import load_mnist_data
 from src.scRNA_dataset import load_scRNA_data
-# Import necessary utilities but not compute_minimax_offset since we have our own implementation
 from src.mesh_sampling import KDTree, cdist
 from src.embedding_algorithms import compute_embedding
 
@@ -51,7 +50,6 @@ from src.embedding_algorithms import compute_embedding
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger("cluster_ratio_analysis")
 
-# Set up high-quality figure parameters
 SMALL_SIZE = 12
 MEDIUM_SIZE = 14
 BIGGER_SIZE = 16
@@ -74,7 +72,6 @@ def create_colormap(n_colors):
     if n_colors <= 20:
         return base_cmap
     
-    # For more than 20 colors, create a custom colormap
     return ListedColormap(sns.color_palette("husl", n_colors))
 
 
@@ -107,7 +104,6 @@ def sample_data(X, n_samples, y=None, random_state=42, stratify=True):
     
     rng = np.random.default_rng(random_state)
     
-    # If no labels or stratification not requested, do simple random sampling
     if y is None or not stratify:
         indices = rng.choice(X.shape[0], size=n_samples, replace=False)
         return X[indices], indices
@@ -137,9 +133,7 @@ def sample_data(X, n_samples, y=None, random_state=42, stratify=True):
         class_indices = np.where(y == label)[0]
         if len(class_indices) < samples_per_class[i]:
             logger.warning(f"Class {label} has fewer samples ({len(class_indices)}) than requested ({samples_per_class[i]})")
-            # Take all available samples for this class
             indices.extend(class_indices)
-            # Redistribute the deficit to other classes
             deficit = samples_per_class[i] - len(class_indices)
             if deficit > 0:
                 other_classes = [j for j in range(n_classes) if j != i]
@@ -154,7 +148,7 @@ def sample_data(X, n_samples, y=None, random_state=42, stratify=True):
             sampled = rng.choice(class_indices, size=samples_per_class[i], replace=False)
             indices.extend(sampled)
     
-    # Shuffle the combined indices
+    # Shuffle the indices
     indices = np.array(indices)
     if len(indices) > 0:
         indices = rng.permutation(indices)
@@ -180,7 +174,6 @@ def compute_fill_distance_point(X, point_idx, knn_k=None):
     fill_distance : float
         kNN distance for the specified point
     """
-    # If only one point exists, return 0
     if X.shape[0] <= 1:
         return 0.0
     
@@ -222,20 +215,16 @@ def compute_fill_distances(X, knn_k=None):
     if X.shape[0] <= 1:
         return 0.0
     
-    # If k is not specified, calculate based on data dimensionality and size
     if knn_k is None:
         d = X.shape[1]
         n = X.shape[0]
         knn_k = int(np.round(d + np.log2(n / 0.05)))
     
-    # Ensure k is not larger than number of points - 1
     knn_k = min(knn_k, X.shape[0] - 1)
     
-    # Compute k nearest neighbors
     nbrs = NearestNeighbors(n_neighbors=knn_k+1, algorithm='auto').fit(X)
     distances, _ = nbrs.kneighbors(X)
     
-    # distances[:, 0] is distance to self (0), so k-th nearest neighbor is at index k
     knn_dists = distances[:, knn_k]
     
     return np.max(knn_dists)
@@ -296,7 +285,7 @@ def compute_cluster_metrics(X, k, random_state=42, clustering_method='kmeans', a
     else:
         raise ValueError(f"Unsupported clustering method: {clustering_method}. Use 'kmeans' or 'spectral'.")
     
-    # Compute global fill distance for each cluster (will be used for global method)
+    # Compute global fill distance for each cluster
     fill_distances = []
     for i in range(k):
         cluster_points = X[labels == i]
@@ -306,17 +295,14 @@ def compute_cluster_metrics(X, k, random_state=42, clustering_method='kmeans', a
         else:
             fill_distances.append(np.nan)
     
-    # Storage for local fill distances when using local method
     local_fill_distances = np.zeros((k, k))
     
-    # Compute minimax offset between each pair of clusters
     offsets = np.zeros((k, k))
-    closest_points = {}  # Store closest point pairs for local fill distance calculation
+    closest_points = {}
     
     for i in range(k):
         for j in range(i+1, k):
             if fill_distance_type == 'local':
-                # For local method, also get the closest points
                 offset, (idx1, idx2) = compute_minimax_offset(X, labels, cluster_indices=[i, j], return_points=True)
                 closest_points[(i, j)] = (idx1, idx2)
             else:
@@ -498,7 +484,7 @@ def calculate_ratio_percentages(ratios, threshold=0.5):
     # Extract upper triangle (excluding diagonal)
     upper_triangle = ratios[np.triu_indices_from(ratios, k=1)]
     
-    # Count ratios above threshold (ignoring NaNs)
+    # Count ratios above threshold
     valid_ratios = upper_triangle[~np.isnan(upper_triangle)]
     if len(valid_ratios) == 0:
         return 0.0
@@ -562,14 +548,11 @@ def visualize_ratio_heatmap(ratios, title, filename):
     """
     plt.figure(figsize=(10, 8))
     
-    # Mask the diagonal (self-ratios)
     mask = np.eye(ratios.shape[0], dtype=bool)
     
-    # Create heatmap
     ax = sns.heatmap(ratios, annot=True, fmt=".2f", cmap="YlOrRd", mask=mask, 
                    vmin=0, vmax=2, cbar_kws={'label': 'Offset/Fill Distance Ratio'})
     
-    # Add lines between clusters
     for i in range(ratios.shape[0]):
         ax.axhline(i, color='white', lw=1)
         ax.axvline(i, color='white', lw=1)
@@ -601,10 +584,8 @@ def plot_ratio_percentages(results_df, output_file, group_by_method=False):
         methods = sorted(results_df['clustering_method'].unique())
         sample_sizes = sorted(results_df['sample_size'].unique())
         
-        # Create a different color palette for each method
         method_colors = dict(zip(methods, sns.color_palette("tab10", len(methods))))
         
-        # Create a color for each size-method combination
         for i, method in enumerate(methods):
             method_df = results_df[results_df['clustering_method'] == method]
             
@@ -619,12 +600,9 @@ def plot_ratio_percentages(results_df, output_file, group_by_method=False):
                            label=f'{method}, {size} samples', 
                            linewidth=2, markersize=8)
     else:
-        # Group by sample size (original behavior)
         sample_sizes = sorted(results_df['sample_size'].unique())
         
-        # Plot line for each sample size
         for i, size in enumerate(sample_sizes):
-            # If we have multiple clustering methods, further group by method
             if 'clustering_method' in results_df.columns and len(results_df['clustering_method'].unique()) > 1:
                 methods = sorted(results_df['clustering_method'].unique())
                 for j, method in enumerate(methods):
@@ -639,7 +617,6 @@ def plot_ratio_percentages(results_df, output_file, group_by_method=False):
                                label=f'{size} samples, {method}',
                                linewidth=2, markersize=8)
             else:
-                # Single method case
                 size_df = results_df[results_df['sample_size'] == size]
                 k_values = size_df['k']
                 percentages = size_df['percentage_above_threshold']
@@ -689,7 +666,6 @@ def analyze_dataset(dataset_name, sample_sizes, output_dir, clustering_method='k
     """
     logger.info(f"Analyzing {dataset_name} dataset")
     
-    # Load dataset
     if dataset_name.lower() == 'mnist':
         X, true_labels = load_mnist_data(n_samples=max(sample_sizes), shuffle=True, stratify=True)
         dataset_label = "MNIST"
@@ -714,25 +690,19 @@ def analyze_dataset(dataset_name, sample_sizes, output_dir, clustering_method='k
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     
-    # Create results dataframe
     results = []
     
-    # Analyze each sample size
     for sample_size in sample_sizes:
         logger.info(f"Processing sample size: {sample_size}")
         
-        # Create sample size specific output directory
         sample_output_dir = os.path.join(output_dir, f"{dataset_label.lower()}_{sample_size}")
         os.makedirs(sample_output_dir, exist_ok=True)
         
-        # Sample the data with stratification based on true labels
         X_sampled, indices = sample_data(X_scaled, sample_size, y=true_labels, stratify=True)
         
-        # Get corresponding true labels for the sample
         if true_labels is not None:
             true_labels_sampled = true_labels[indices]
             
-            # Log the distribution of true labels in the sample to verify stratification
             if len(np.unique(true_labels)) <= 20:  # Only log if there aren't too many classes
                 unique_labels = np.unique(true_labels_sampled)
                 label_counts = {str(label): np.sum(true_labels_sampled == label) for label in unique_labels}
@@ -740,7 +710,6 @@ def analyze_dataset(dataset_name, sample_sizes, output_dir, clustering_method='k
         else:
             true_labels_sampled = None
         
-        # For each k value
         for k in k_range:
             logger.info(f"  Computing metrics for k={k}")
             
@@ -755,10 +724,8 @@ def analyze_dataset(dataset_name, sample_sizes, output_dir, clustering_method='k
                 fill_distance_type=fill_distance_type
             )
             
-            # Calculate percentage of ratios above threshold
             percentage = calculate_ratio_percentages(metrics["ratios"], threshold=threshold)
             
-            # Add to results
             results.append({
                 "dataset": dataset_label,
                 "sample_size": sample_size,
@@ -773,18 +740,15 @@ def analyze_dataset(dataset_name, sample_sizes, output_dir, clustering_method='k
                 "threshold": threshold
             })
             
-            # Create visualizations for specific k values (to avoid too many plots)
-            if k in [2, 3, 5, 6, 10, 15, 20]:  # Selected k values for visualization
-                # Create a method suffix for filenames
+            # Create visualizations for specific k values 
+            if k in [2, 3, 5, 6, 10, 15, 20]:  # Selected k values
                 method_suffix = f"_{clustering_method}" if clustering_method != 'kmeans' else ""
                 if fill_distance_type == 'local':
                     method_suffix += "_local"
                 
-                # Create k-specific output directory for embeddings
                 k_output_dir = os.path.join(sample_output_dir, f"k{k}{method_suffix}")
                 os.makedirs(k_output_dir, exist_ok=True)
                 
-                # Multi-embedding cluster visualization (UMAP, t-SNE, PCA)
                 visualize_clusters_multi_embedding(
                     X_sampled,
                     metrics["labels"],
@@ -793,7 +757,6 @@ def analyze_dataset(dataset_name, sample_sizes, output_dir, clustering_method='k
                     embedding_methods=['tsne', 'umap', 'pca']
                 )
                 
-                # Traditional t-SNE visualization (for backward compatibility)
                 visualize_clusters_tsne(
                     X_sampled, 
                     metrics["labels"],
@@ -801,14 +764,12 @@ def analyze_dataset(dataset_name, sample_sizes, output_dir, clustering_method='k
                     os.path.join(k_output_dir, f"clusters_tsne_legacy.png")
                 )
                 
-                # Ratio heatmap
                 visualize_ratio_heatmap(
                     metrics["ratios"],
                     f"{dataset_label} - {sample_size} samples, k={k} - Offset/Fill Distance Ratios ({clustering_method})",
                     os.path.join(k_output_dir, f"ratio_heatmap.png")
                 )
                 
-                # Multi-embedding visualization
                 visualize_clusters_multi_embedding(
                     X_sampled,
                     metrics["labels"],
@@ -816,33 +777,25 @@ def analyze_dataset(dataset_name, sample_sizes, output_dir, clustering_method='k
                     sample_output_dir
                 )
     
-    # Convert results to dataframe
     results_df = pd.DataFrame(results)
     
-    # Create method suffix for filenames
     method_suffix = f"_{clustering_method}" if clustering_method != 'kmeans' else ""
     
-    # Save results to CSV
     csv_file = os.path.join(output_dir, f"{dataset_label.lower()}_cluster_ratio_results{method_suffix}.csv")
     results_df.to_csv(csv_file, index=False)
     logger.info(f"Saved results to {csv_file}")
     
-    # Create summary plot
     plot_file = os.path.join(output_dir, f"{dataset_label.lower()}_ratio_percentage_plot{method_suffix}.png")
     plot_ratio_percentages(results_df, plot_file)
     
-    # If we have multiple methods, create a comparison plot
     if 'clustering_method' in results_df.columns and len(results_df['clustering_method'].unique()) > 1:
         comparison_plot = os.path.join(output_dir, f"{dataset_label.lower()}_method_comparison_plot.png")
         plot_ratio_percentages(results_df, comparison_plot, group_by_method=True)
     
-    # Create individual plots for each sample size
     for sample_size in sample_sizes:
         sample_df = results_df[results_df['sample_size'] == sample_size]
         
-        # Check if we have multiple clustering methods
         if 'clustering_method' in sample_df.columns and len(sample_df['clustering_method'].unique()) > 1:
-            # Create a plot that compares methods for this sample size
             sample_plot_file = os.path.join(output_dir, f"{dataset_label.lower()}_{sample_size}_method_comparison.png")
             
             plt.figure(figsize=(8, 6))
@@ -862,10 +815,8 @@ def analyze_dataset(dataset_name, sample_sizes, output_dir, clustering_method='k
             plt.savefig(sample_plot_file, dpi=300)
             plt.close()
         
-        # Create individual plots for each method
         methods = ['kmeans'] if 'clustering_method' not in sample_df.columns else sorted(sample_df['clustering_method'].unique())
         for method in methods:
-            # Filter by method if applicable
             if 'clustering_method' in sample_df.columns:
                 method_df = sample_df[sample_df['clustering_method'] == method]
             else:
@@ -914,39 +865,32 @@ def visualize_clusters_multi_embedding(X, labels, title_prefix, output_dir, embe
     if embedding_methods is None:
         embedding_methods = ['tsne', 'umap', 'pca']
         
-    # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
     
-    # Initialize results dictionary
     embedding_results = {}
     
-    # Get cluster information
     unique_labels = np.unique(labels)
     n_clusters = len(unique_labels)
     colormap = create_colormap(n_clusters)
     
-    # Process each embedding method
     for method_name in embedding_methods:
         try:
             logger.info(f"Generating {method_name.upper()} embedding...")
             start_time = time.time()
             
             if method_name.lower() == 'tsne':
-                # Use t-SNE with tuned parameters for better performance
                 tsne = TSNE(
                     n_components=2,
-                    perplexity=min(30, X.shape[0] // 5),  # Adaptive perplexity
+                    perplexity=min(30, X.shape[0] // 5),
                     n_iter=1000,
                     random_state=42,
-                    init='pca'  # Use PCA initialization for better stability
+                    init='pca'
                 )
                 embedded_data = tsne.fit_transform(X)
                 
             elif method_name.lower() == 'umap':
-                # Import UMAP here to avoid requiring it for other functions
                 try:
                     import umap
-                    # UMAP with tuned parameters
                     reducer = umap.UMAP(
                         n_components=2,
                         n_neighbors=min(15, X.shape[0] // 5),  # Adaptive neighbors
@@ -960,26 +904,19 @@ def visualize_clusters_multi_embedding(X, labels, title_prefix, output_dir, embe
                     continue
                     
             elif method_name.lower() == 'pca':
-                # PCA is straightforward and fast
                 pca = PCA(n_components=2)
                 embedded_data = pca.fit_transform(X)
-                # Record variance explained
                 embedding_results[f'{method_name}_variance_explained'] = pca.explained_variance_ratio_.sum()
                 
             else:
-                # Use the general compute_embedding function for other methods
-                # (will use embedding_algorithms.py implementations)
                 embedded_data, _ = compute_embedding(X, method=method_name.lower(), n_components=2)
             
             logger.info(f"{method_name.upper()} completed in {time.time() - start_time:.2f} seconds")
             
-            # Save the embedding data for return
             embedding_results[method_name] = embedded_data
             
-            # Create visualization figure
             plt.figure(figsize=(10, 8))
             
-            # Plot each cluster with a different color
             for i, label in enumerate(unique_labels):
                 mask = labels == label
                 plt.scatter(embedded_data[mask, 0], embedded_data[mask, 1], 
@@ -987,12 +924,10 @@ def visualize_clusters_multi_embedding(X, labels, title_prefix, output_dir, embe
                           alpha=0.7, s=30, edgecolor='none',
                           label=f'Cluster {label}')
                 
-            # Add title and legend
             plt.title(f"{title_prefix} - {method_name.upper()} Projection")
             plt.legend(loc='best', bbox_to_anchor=(1.05, 1), fontsize='small')
             plt.tight_layout()
             
-            # Save figure
             filename = os.path.join(output_dir, f"clusters_{method_name.lower()}.png")
             plt.savefig(filename, dpi=300, bbox_inches='tight')
             plt.close()
@@ -1030,7 +965,6 @@ def optimized_spectral_clustering(X, n_clusters, affinity='rbf', n_neighbors=10,
     """
     n_samples = X.shape[0]
     
-    # For small datasets, use sklearn's implementation
     if n_samples < 1000:
         clusterer = SpectralClustering(
             n_clusters=n_clusters,
@@ -1040,32 +974,24 @@ def optimized_spectral_clustering(X, n_clusters, affinity='rbf', n_neighbors=10,
         )
         return clusterer.fit_predict(X)
     
-    # For larger datasets, use optimized implementation
     logger.info("Using optimized spectral clustering implementation for large dataset")
     
-    # Step 1: Create affinity matrix
     if affinity == 'precomputed':
-        # Assume X is already a precomputed affinity matrix
         affinity_matrix = X
     elif affinity == 'nearest_neighbors':
-        # Create sparse KNN graph
         connectivity = kneighbors_graph(
             X, n_neighbors=n_neighbors, 
             include_self=False,
             mode='connectivity'
         )
-        # Make the graph symmetric
         affinity_matrix = 0.5 * (connectivity + connectivity.T)
     elif affinity == 'rbf':
-        # Use KNN + RBF for sparse similarity matrix
         nn = NearestNeighbors(n_neighbors=min(n_neighbors, n_samples-1))
         nn.fit(X)
         distances, indices = nn.kneighbors(X)
         
-        # Compute sigma as the median distance
         sigma = np.median(distances[:, -1]) if distances.size > 0 else 1.0
         
-        # Create sparse affinity matrix using precomputed neighbors
         rows, cols, vals = [], [], []
         for i in range(n_samples):
             for j_idx, j in enumerate(indices[i]):
@@ -1080,13 +1006,10 @@ def optimized_spectral_clustering(X, n_clusters, affinity='rbf', n_neighbors=10,
             (vals, (rows, cols)), 
             shape=(n_samples, n_samples)
         )
-        # Make sure it's symmetric
         affinity_matrix = 0.5 * (affinity_matrix + affinity_matrix.T)
     else:
         raise ValueError(f"Unknown affinity type: {affinity}")
     
-    # Step 2: Compute normalized graph Laplacian
-    # Degree matrix
     degrees = np.array(affinity_matrix.sum(axis=1)).flatten()
     
     # Check if graph is connected
@@ -1099,13 +1022,10 @@ def optimized_spectral_clustering(X, n_clusters, affinity='rbf', n_neighbors=10,
             affinity_matrix = affinity_matrix + sparse.eye(n_samples) * 1e-8
             degrees = np.array(affinity_matrix.sum(axis=1)).flatten()
     
-    # Compute D^(-1/2)
     d_inv_sqrt = sparse.diags(1.0 / np.sqrt(degrees))
     
-    # Normalized Laplacian: I - D^(-1/2) * A * D^(-1/2)
     laplacian = sparse.eye(n_samples) - d_inv_sqrt @ affinity_matrix @ d_inv_sqrt
     
-    # Step 3: Find eigenvalues and eigenvectors
     logger.info("Computing eigendecomposition...")
     try:
         # Use eigsh which is faster for symmetric matrices
@@ -1114,17 +1034,14 @@ def optimized_spectral_clustering(X, n_clusters, affinity='rbf', n_neighbors=10,
         )
     except Exception as e:
         logger.warning(f"Error in sparse eigendecomposition: {e}. Falling back to dense.")
-        # Fall back to dense calculation for problematic cases
         eigenvalues, eigenvectors = np.linalg.eigh(laplacian.toarray())
         eigenvectors = eigenvectors[:, :n_clusters]
     
-    # Step 4: Normalize rows of eigenvectors
     for i in range(eigenvectors.shape[0]):
         norm = np.sqrt(np.sum(eigenvectors[i, :]**2))
         if norm > 1e-10:
             eigenvectors[i, :] = eigenvectors[i, :] / norm
     
-    # Step 5: Cluster using K-means
     kmeans = KMeans(n_clusters=n_clusters, random_state=random_state, n_init=10)
     labels = kmeans.fit_predict(eigenvectors)
     
@@ -1154,16 +1071,12 @@ def main():
     
     args = parser.parse_args()
     
-    # Parse sample sizes
     sample_sizes = [int(size) for size in args.sample_sizes.split(',')]
     
-    # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
     
-    # Set random seed
     np.random.seed(args.random_seed)
     
-    # Analyze the dataset
     start_time = time.time()
     dataset_results = analyze_dataset(
         args.dataset, 
@@ -1179,8 +1092,6 @@ def main():
     
     logger.info(f"Analysis completed in {end_time - start_time:.2f} seconds")
     
-    # Create a simple report
-    # Create file suffix based on clustering method and fill distance type
     method_suffix = f"_{args.clustering}" if args.clustering != 'kmeans' else ""
     if args.fill_distance_type == 'local':
         method_suffix += "_local"
