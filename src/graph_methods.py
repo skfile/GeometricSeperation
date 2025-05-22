@@ -3,6 +3,7 @@ graph_methods.py
 -----------------------------
 Module for graph-based methods for clustering and pruning, as described in the paper.
 
+Implementation adapted from: https://github.com/TristanSaidi/orcml.git
 """
 
 import numpy as np
